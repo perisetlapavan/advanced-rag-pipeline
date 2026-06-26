@@ -1,0 +1,10 @@
+langchain>=0.3.0
+langchain-community
+langchain-groq
+langchain-text-splitters
+chromadb
+rank_bm25
+sentence-transformers
+huggingface_hub
+python-dotenv
+numpy

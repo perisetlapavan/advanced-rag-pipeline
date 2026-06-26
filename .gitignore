@@ -1,0 +1,29 @@
+@"
+# Environment & secrets
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# ChromaDB local store (generated at runtime)
+chroma_db/
+
+# Model cache (downloaded at runtime, no need to push)
+.cache/
+huggingface/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+"@ | Out-File -FilePath .gitignore -Encoding utf8
