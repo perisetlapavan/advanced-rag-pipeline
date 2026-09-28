@@ -1,4 +1,3 @@
-@"
 # Environment & secrets
 .env
 
@@ -19,6 +18,9 @@ chroma_db/
 .cache/
 huggingface/
 
+# Eval results (regenerate via src/runner.py)
+results/results.json
+
 # OS junk
 .DS_Store
 Thumbs.db
@@ -26,4 +28,3 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
-"@ | Out-File -FilePath .gitignore -Encoding utf8

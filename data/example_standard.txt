@@ -1,7 +1,7 @@
 SPECIFICATION ID: SPEC-2026-X9
 SYSTEM: High-Pressure Cooling Assembly
 
-OPERATIONAL TEMPERATURE LIMIT: Max 180 degrees C, Min -10 degrees C.
+OPERATIONAL TEMPERATURE LIMIT: Max 180°C, Min -10°C.
 
 CRITICAL SHUTDOWN CRITERIA:
 If pressure exceeds 450 kPa for more than 4 seconds, trip valve V-102

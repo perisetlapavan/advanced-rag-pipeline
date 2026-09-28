@@ -31,14 +31,14 @@ class TechnicalRAGPipeline:
     Groq-powered orchestration layer.
     - Retrieves grounded context via AdvancedTechnicalRetriever.
     - Applies a Chain-of-Thought prompt enforcing strict context adherence.
-    - Uses llama-3.3-70b-versatile at temperature=0.0 for deterministic output.
+    - Uses openai/gpt-oss-120B at temperature=0.0 for deterministic output.
     """
 
     def __init__(self, retriever: AdvancedTechnicalRetriever):
         self.retriever = retriever
-        print("  [Engine] Connecting to Groq API (llama-3.3-70b-versatile)...")
+        print("  [Engine] Connecting to Groq API (openai/gpt-oss-120B)...")
         self.llm = ChatGroq(
-            model_name="llama-3.3-70b-versatile",
+            model_name="openai/gpt-oss-120b",
             temperature=0.0,
         )
         self.prompt = ChatPromptTemplate.from_messages(
