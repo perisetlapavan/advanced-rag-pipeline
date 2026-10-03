@@ -1,0 +1,30 @@
+# Environment & secrets
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# ChromaDB local store (generated at runtime)
+chroma_db/
+
+# Model cache (downloaded at runtime, no need to push)
+.cache/
+huggingface/
+
+# Eval results (regenerate via src/runner.py)
+results/results.json
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

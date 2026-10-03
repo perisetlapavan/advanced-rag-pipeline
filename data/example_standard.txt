@@ -1,0 +1,16 @@
+SPECIFICATION ID: SPEC-2026-X9
+SYSTEM: High-Pressure Cooling Assembly
+
+OPERATIONAL TEMPERATURE LIMIT: Max 180°C, Min -10°C.
+
+CRITICAL SHUTDOWN CRITERIA:
+If pressure exceeds 450 kPa for more than 4 seconds, trip valve V-102
+must isolate the coolant loop immediately to prevent thermal runaway.
+
+COMMUNICATION PROTOCOL:
+Modbus TCP over Port 502.
+Register 40001 stores the system status word.
+Register 40002 stores current pressure in kPa (unsigned 16-bit integer).
+
+MAINTENANCE INTERVAL: Full inspection every 2000 operating hours.
+COOLANT TYPE: Deionized water with corrosion inhibitor Grade CI-7.
