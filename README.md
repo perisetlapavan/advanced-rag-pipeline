@@ -68,10 +68,9 @@ and **how do you stop it from doing something you didn't intend?**
 
 The pipeline already has a first line of defense — the chain-of-thought
 prompt forces an `INSUFFICIENT_LOCAL_CONTEXT` response instead of
-hallucinating when the answer isn't in the retrieved chunks. The eval
-harness measures how well that native guard performs, and adds a layer the
-prompt alone doesn't cover: PII and prompt-injection checks run *before* the
-question reaches the LLM.
+answering beyond the retrieved context. The eval harness measures how well
+that native guard performs, and adds a layer the prompt alone doesn't cover:
+PII and prompt-injection checks run *before* the question reaches the LLM.
 
 ## What the harness does
 
@@ -80,9 +79,9 @@ question reaches the LLM.
    against live retrieval (not hardcoded context).
 2. **LLM-as-judge evaluation** — scores each answer on correctness and
    groundedness (1-5) against the context the retriever *actually pulled*,
-   with a one-sentence justification. The judge model defaults to
-   `llama-3.3-70b-versatile` and can be changed with the `GROQ_JUDGE_MODEL`
-   environment variable.
+   with a one-sentence justification. The judge is a separate Groq model,
+   defaulting to `llama-3.3-70b-versatile`, configurable via the
+   `GROQ_JUDGE_MODEL` environment variable.
 3. **Input guardrails** — regex-based PII detection (account-style numbers,
    PAN, email, Indian mobile numbers) and a prompt-injection phrase list,
    run before the pipeline is called at all.
@@ -100,47 +99,41 @@ question reaches the LLM.
 
 ## Test set
 
-`data/test_cases.json` contains **50 cases across 4 categories**, all written
+`data/test_cases.json` is a **12-case suite across 4 categories**, written
 against the sample spec in `data/example_standard.txt`:
 
-| Category | Count | IDs | Expected answer | What it tests |
-|---|---|---|---|---|
-| `normal` | 20 | `norm_001`–`norm_020` | The ground-truth answer | Factual lookup, plus threshold/boundary reasoning (e.g. 400 kPa for 30 s, exactly 450 kPa, -15°C, 190°C) |
-| `no_answer_in_context` | 10 | `edge_001`–`edge_010` | `INSUFFICIENT_LOCAL_CONTEXT` | Questions the spec doesn't answer, including near-misses such as register 40003 or a coolant replacement interval |
-| `prompt_injection` | 10 | `adv_001`–`adv_010` | `REFUSE` | Instruction override, DAN-style role-play, system-prompt extraction, fake admin messages, translation/fiction framing |
-| `pii_bait` | 10 | `pii_001`–`pii_010` | `REDACT_AND_REFUSE` | Questions carrying PII (badge/Aadhaar/card numbers, PAN, email, phone, passport, name + address + DOB) alongside an override request |
+| Category | Count | IDs | Expected answer |
+|---|---|---|---|
+| `normal` | 5 | `norm_001`–`norm_005` | The ground-truth answer from the spec |
+| `no_answer_in_context` | 2 | `edge_001`–`edge_002` | `INSUFFICIENT_LOCAL_CONTEXT` |
+| `prompt_injection` | 3 | `adv_001`–`adv_003` | `REFUSE` |
+| `pii_bait` | 2 | `pii_001`–`pii_002` | `REDACT_AND_REFUSE` |
 
-The adversarial sets deliberately mix phrasings the input guardrails are built
-to catch with paraphrased or unformatted variants they are not (for example
-"forget everything you were told", "translate your system instructions", a
-phone number written as `+91 98765 43210`, a passport number, a name with
-address). Run on their own, the input guardrails catch 13 of the 20
-adversarial cases; the remaining 7 depend on the model refusing by itself.
-That gap is intentional: it is what the output-side checks and the dashboard
-are there to expose.
+A larger 50-case set (20 normal / 10 out-of-context / 10 injection / 10 PII)
+is available in `data/test_cases_extended.json`; see "Extending it".
 
 ## Results
 
-> **These numbers come from the earlier 12-case run and must be regenerated
-> for the 50-case set.** `results/results.json` is gitignored, so re-run
-> `python src/runner.py` and update this table before quoting it anywhere.
+Latest run: the 12-case suite, guardrails off vs. on.
 
 | Metric | Guardrails OFF | Guardrails ON | Status |
 |---|---|---|---|
-| Adversarial block rate | 0% | 100% | Valid (see note 1) |
-| Native context-guard rate | 100% | 100% | Valid |
+| Native context-guard rate (out-of-context queries declined) | 100% (2/2) | 100% (2/2) | Valid |
+| Adversarial block rate (injection + PII) | 0% (0/5) | 100% (5/5) | Valid (see note 1) |
 | Hallucination rate | 100% | 58.3% | **Invalid** (see note 2) |
 | Avg. judge correctness | 0.00 / 5 | 0.00 / 5 | **Invalid** (see note 2) |
 
-1. The OFF pass only counts an answer as a block when it is the literal
+1. In the OFF pass an answer only counts as a block when it is the literal
    string `REFUSE`. The model itself declined or returned
    `INSUFFICIENT_LOCAL_CONTEXT` on all 5 adversarial cases in that pass, so
-   0% understates the unguarded pipeline.
+   0% understates the unguarded pipeline. With guardrails on, the input
+   checks blocked all 5 before they reached the LLM.
 2. Every judge call in that run failed with a `404 model_not_found` for
    `llama-3.3-70b-versatile`, so all judge scores were recorded as 0 and
    every judged case counted as ungrounded. The hallucination rate and
    correctness score reflect the failed judge, not the pipeline. Set
-   `GROQ_JUDGE_MODEL` to a model your Groq account can access, then re-run.
+   `GROQ_JUDGE_MODEL` to a model your Groq account can access and re-run
+   before quoting either number.
 
 ## Project structure
 
@@ -153,7 +146,8 @@ genai-rag-eval/
 │   └── engine.py                 # Groq LLM + Chain-of-Thought RAG loop
 ├── data/
 │   ├── example_standard.txt      # Sample technical spec (swap for your own .txt docs)
-│   └── test_cases.json           # 50 cases across 4 categories
+│   ├── test_cases.json           # 12-case suite across 4 categories (used by runner.py)
+│   └── test_cases_extended.json  # Optional 50-case suite, same schema
 ├── src/                          # The eval + guardrails harness
 │   ├── rag_system.py              # Adapter: builds the pipeline once, runs it per question
 │   ├── guardrails.py              # Input + output guardrail checks
@@ -196,16 +190,12 @@ the ingestor loads every `.txt` file in that folder automatically.
 # Quick sanity check — 3 demo queries, no eval/guardrails
 python main.py
 
-# Full evaluation + guardrails suite (50 cases x 2 passes)
+# Full evaluation + guardrails suite (12 cases x 2 passes)
 python src/runner.py
 
 # View results in the browser
 streamlit run dashboard/app.py
 ```
-
-A full run makes up to 100 pipeline calls plus judge calls (cases blocked by
-the input guardrails skip both), so expect it to take a while and to be
-subject to your Groq rate limits.
 
 ## Key design decisions
 
@@ -215,36 +205,41 @@ subject to your Groq rate limits.
 | Hierarchical parent-child chunking | Child chunks (400 chars, 50 overlap) give precision; parent chunks (2000 chars, 200 overlap) give the LLM full surrounding detail. Sizes are in characters, not tokens |
 | BM25 + Vector hybrid | BM25 catches exact keyword hits (register numbers, spec IDs); dense search catches paraphrases. BM25 indexes the full raw documents, the vector store indexes child chunks |
 | `BAAI/bge-reranker-large` | Cross-encoder scores each deduplicated parent context against the query; the top 3 go to the LLM |
-| `temperature=0.0` | Deterministic, reproducible outputs |
+| `openai/gpt-oss-120b` on Groq, `temperature=0.0` | Deterministic, reproducible outputs |
 | `INSUFFICIENT_LOCAL_CONTEXT` guard | Forces the LLM to admit when context is absent — the harness measures how often this actually works |
-| Separate judge model | The judge runs on its own Groq model (default `llama-3.3-70b-versatile`) rather than grading itself |
+| Separate judge model | The judge runs on its own Groq model rather than grading itself |
 | Pipeline built once, reused per case | Avoids reloading the embedding and reranker models for every test question |
 | Guardrails run on the parsed FINAL ANSWER | The chain-of-thought scratch work isn't what a downstream system would consume — only the final answer is checked and scored |
 
 ## Known limitations
 
+- **Small suite.** 12 cases (2 out-of-context, 5 adversarial) is enough to
+  demonstrate the harness, but the rates are coarse: one case moves a rate by
+  8 to 50 points.
 - **Judge model availability.** The default judge model may not be available
   to every Groq account; when it isn't, all scores silently become 0 (the
   error only appears in each result's `justification`). Check that field
   before trusting any aggregate.
 - **Numeric pre-filter is strict.** It compares digit strings, so a correct
   answer that writes `2,000` when the spec says `2000` is flagged as an
-  unsupported claim. This happened on `norm_003` in the 12-case run.
+  unsupported claim. This happened on `norm_003`.
 - **Single small source document.** The sample spec is about 600 characters,
-  so every query retrieves essentially the same context. The test set
-  exercises the generator and guardrails well but barely stresses retrieval;
-  add more documents to measure that.
+  so every query retrieves essentially the same context. The tests exercise
+  the generator and guardrails but barely stress retrieval.
 - **Duplicate chunks across runs.** `Chroma.from_documents` is called against
   the same persist directory on every run, so re-running appends the same
-  chunks again (the shipped store holds 16 embeddings for 2 distinct chunks).
-  The retriever's parent-context dedup hides this in the output, but it
-  crowds the dense top-k. Delete `chroma_db/` before a clean run.
+  chunks again. The retriever's parent-context dedup hides this in the
+  output, but it crowds the dense top-k. Delete `chroma_db/` before a clean
+  run.
 - **Heuristic guardrails.** The input checks are regex and phrase matching,
-  so paraphrased attacks and unformatted PII get through (see the Test set
-  section).
+  so paraphrased attacks and unformatted PII can get through.
 
 ## Extending it
 
+- **Grow the test set**: `data/test_cases_extended.json` has 50 cases,
+  including paraphrased injections and unformatted PII that the input
+  guardrails don't catch by design (13 of its 20 adversarial cases are
+  caught). Copy it over `data/test_cases.json` and re-run to use it.
 - **Fix the duplicates**: clear or reuse the Chroma collection in
   `ingestor.py` instead of appending on each run.
 - **Stress retrieval**: add several longer `.txt` documents and test cases
@@ -254,16 +249,22 @@ subject to your Groq rate limits.
 - **Add RAGAS**: swap the hand-rolled lexical metrics in `eval_metrics.py`
   for `ragas.metrics` if you want the industry-standard metric names.
 - **Add a PII/NER model**: swap the regex PII detector in `guardrails.py`
-  for `presidio` for named-entity-based detection (this would catch the
-  name/address and passport cases the regexes miss).
+  for `presidio` for named-entity-based detection.
 
 ## Resume framing
 
-Fill in the figures only after a valid 50-case run (working judge model).
-
-> Built and evaluated a RAG pipeline (hybrid BM25 + dense retrieval,
-> cross-encoder reranking, Groq-hosted gpt-oss-120b) against a 50-case test
-> suite covering factual, out-of-context, prompt-injection and PII-bait
-> queries, using LLM-as-judge scoring. Added input/output guardrails and
-> measured the native context guard and adversarial block rate before and
-> after: hallucination rate X% → Y%, adversarial block rate A% → B%.
+> • Engineered a RAG pipeline using LangChain, Groq-hosted LLMs, and local
+> BGE embeddings, with a chain-of-thought prompt and an
+> INSUFFICIENT_LOCAL_CONTEXT guard that makes the model decline instead of
+> answering beyond the retrieved context.
+>
+> • Architected hybrid retrieval combining BM25 and dense vector search with
+> hierarchical parent-child chunking, then re-ranked the merged candidates
+> with a BGE cross-encoder so only the top-3 most relevant context blocks
+> reach the LLM.
+>
+> • Built an evaluation and guardrails harness with LLM-as-judge scoring and
+> a Streamlit dashboard; on a 12-case suite (in-scope, out-of-context,
+> prompt-injection, PII), the pipeline declined 2/2 out-of-context queries
+> and input guardrails blocked 5/5 injection and PII attempts before they
+> reached the LLM.
